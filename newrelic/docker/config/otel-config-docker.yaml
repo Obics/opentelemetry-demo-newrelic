@@ -120,7 +120,7 @@ processors:
 exporters:
   debug: {}
   otlphttp/newrelic:
-    endpoint: https://otlp.nr-data.net:4318
+    endpoint: https://otlp.eu01.nr-data.net:4318
     headers:
       api-key: ${env:NEW_RELIC_LICENSE_KEY}
 
