@@ -28,7 +28,7 @@ from opentelemetry.instrumentation.urllib3 import URLLib3Instrumentor
 from opentelemetry.instrumentation.logging import LoggingInstrumentor
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler, LogRecordProcessor
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
 
@@ -38,17 +38,49 @@ from openfeature.contrib.hook.opentelemetry import TracingHook
 
 from playwright.async_api import Route, Request
 
+# Custom processor to filter out redundant or low-value attributes
+# This helps reduce log volume and noise in frequently executed HotPaths
+class AttributeFilteringProcessor(LogRecordProcessor):
+    def emit(self, log_record):
+        # Attributes to filter out from the log record
+        unwanted_attributes = ["entity.guid", "entity.guids", "otel.library.name", "otel.library.version"]
+        if log_record.attributes:
+            for attr in unwanted_attributes:
+                if attr in log_record.attributes:
+                    del log_record.attributes[attr]
+
+        # Additionally, clear instrumentation scope name/version if they are considered noise
+        if log_record.instrumentation_scope:
+            # Note: instrumentation_scope is often shared, but we can try to minimize its impact
+            # Some exporters use these fields to populate otel.library.name/version
+            pass
+
+    def shutdown(self):
+        pass
+
+    def force_flush(self, timeout_millis=30000):
+        pass
+
+# Configure resource and filter out redundant telemetry SDK attributes
+resource = Resource.create({
+    "service.name": os.environ.get("OTEL_SERVICE_NAME", "load-generator"),
+    "service.namespace": "opentelemetry-demo",
+})
+filtered_resource_attributes = {k: v for k, v in resource.attributes.items() if not k.startswith("telemetry.sdk.")}
+resource = Resource(filtered_resource_attributes)
+
 # Configure tracer provider first (needed for trace context in logs)
-tracer_provider = TracerProvider()
+tracer_provider = TracerProvider(resource=resource)
 trace.set_tracer_provider(tracer_provider)
 tracer_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(insecure=True)))
 
 # Configure logger provider with the same resource
-logger_provider = LoggerProvider()
+logger_provider = LoggerProvider(resource=resource)
 set_logger_provider(logger_provider)
 
 # Set up log exporter and processor
 log_exporter = OTLPLogExporter(insecure=True)
+logger_provider.add_log_record_processor(AttributeFilteringProcessor())
 logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
 
 # Create logging handler that will include trace context
@@ -127,14 +159,14 @@ class WebsiteUser(HttpUser):
     def browse_product(self):
         product = random.choice(products)
         with self.tracer.start_as_current_span("user_browse_product", context=Context(), attributes={"product.id": product}):
-            logging.info(f"User browsing product: {product}")
+            logging.info("User browsing product")
             self.client.get("/api/products/" + product)
 
     @task(3)
     def get_recommendations(self):
         product = random.choice(products)
         with self.tracer.start_as_current_span("user_get_recommendations", context=Context(), attributes={"product.id": product}):
-            logging.info(f"User getting recommendations for product: {product}")
+            logging.info("User getting recommendations")
             params = {
                 "productIds": [product],
             }
@@ -144,7 +176,7 @@ class WebsiteUser(HttpUser):
     def get_product_reviews(self):
         product = random.choice(products)
         with self.tracer.start_as_current_span("user_get_product_reviews", context=Context(), attributes={"product.id": product}):
-            logging.info(f"User getting product reviews for product: {product}")
+            logging.info("User getting product reviews")
             self.client.get("/api/product-reviews/" + product)
 
     @task(1)
@@ -152,7 +184,7 @@ class WebsiteUser(HttpUser):
         product = random.choice(products)
         question = 'Can you summarize the product reviews?'
         with self.tracer.start_as_current_span("user_ask_product_ai_assistant", context=Context(), attributes={"product.id": product, "question": question}):
-            logging.info(f"Asking the AI Assistant a question for: {product} {question}")
+            logging.info("Asking the AI Assistant a question")
             question = {
                 "question": question
             }
@@ -162,7 +194,7 @@ class WebsiteUser(HttpUser):
     def get_ads(self):
         category = random.choice(categories)
         with self.tracer.start_as_current_span("user_get_ads", context=Context(), attributes={"category": str(category)}):
-            logging.info(f"User getting ads for category: {category}")
+            logging.info("User getting ads")
             params = {
                 "contextKeys": [category],
             }
@@ -181,7 +213,7 @@ class WebsiteUser(HttpUser):
         product = random.choice(products)
         quantity = random.choice([1, 2, 3, 4, 5, 10])
         with self.tracer.start_as_current_span("user_add_to_cart", context=Context(), attributes={"user.id": user, "product.id": product, "quantity": quantity}):
-            logging.info(f"User {user} adding {quantity} of product {product} to cart")
+            logging.info("User adding product to cart")
             self.client.get("/api/products/" + product)
             cart_item = {
                 "item": {
@@ -200,7 +232,7 @@ class WebsiteUser(HttpUser):
             checkout_person = random.choice(people)
             checkout_person["userId"] = user
             self.client.post("/api/checkout", json=checkout_person)
-            logging.info(f"Checkout completed for user {user}")
+            logging.info("Checkout completed")
 
     @task(1)
     def checkout_multi(self):
@@ -213,21 +245,21 @@ class WebsiteUser(HttpUser):
             checkout_person = random.choice(people)
             checkout_person["userId"] = user
             self.client.post("/api/checkout", json=checkout_person)
-            logging.info(f"Multi-item checkout completed for user {user}")
+            logging.info("Multi-item checkout completed")
 
     @task(5)
     def flood_home(self):
         flood_count = get_flagd_value("loadGeneratorFloodHomepage")
         if flood_count > 0:
             with self.tracer.start_as_current_span("user_flood_home",  context=Context(), attributes={"flood.count": flood_count}):
-                logging.info(f"User flooding homepage {flood_count} times")
+                logging.info("User flooding homepage")
                 for _ in range(0, flood_count):
                     self.client.get("/")
 
     def on_start(self):
-        with self.tracer.start_as_current_span("user_session_start", context=Context()):
-            session_id = str(uuid.uuid4())
-            logging.info(f"Starting user session: {session_id}")
+        session_id = str(uuid.uuid4())
+        with self.tracer.start_as_current_span("user_session_start", context=Context(), attributes={"session.id": session_id}):
+            logging.info("Starting user session")
             ctx = baggage.set_baggage("session.id", session_id)
             ctx = baggage.set_baggage("synthetic_request", "true", context=ctx)
             context.attach(ctx)
