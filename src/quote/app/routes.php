@@ -63,10 +63,6 @@ return function (App $app) {
         $span->addEvent('Quote processed, response sent back', [
             'app.quote.cost.total' => $data
         ]);
-        //exported as an opentelemetry log (see dependencies.php)
-        $logger->info('Calculated quote', [
-            'total' => $data,
-        ]);
 
         return $response
             ->withHeader('Content-Type', 'application/json');
