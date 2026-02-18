@@ -460,8 +460,6 @@ func (p *productCatalog) GetProduct(ctx context.Context, req *pb.GetProductReque
 	logger.LogAttrs(
 		ctx,
 		slog.LevelInfo, "Product Found",
-		slog.String("app.product.name", found.Name),
-		slog.String("app.product.id", req.Id),
 	)
 
 	return found, nil
