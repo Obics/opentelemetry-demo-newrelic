@@ -133,9 +133,9 @@ public class ValkeyCartStore : ICartStore
     {
         var stopwatch = Stopwatch.StartNew();
 
-        if (_logger.IsEnabled(LogLevel.Information))
+        if (_logger.IsEnabled(LogLevel.Debug))
         {
-            _logger.LogInformation("AddItemAsync called with userId={userId}, productId={productId}, quantity={quantity}", userId, productId, quantity);
+            _logger.LogDebug("AddItemAsync called with userId={userId}, productId={productId}, quantity={quantity}", userId, productId, quantity);
         }
 
         try
