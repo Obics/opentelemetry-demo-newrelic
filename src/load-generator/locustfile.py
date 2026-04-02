@@ -127,7 +127,7 @@ class WebsiteUser(HttpUser):
     def browse_product(self):
         product = random.choice(products)
         with self.tracer.start_as_current_span("user_browse_product", context=Context(), attributes={"product.id": product}):
-            logging.info(f"User browsing product: {product}")
+            logging.info("User browsing product")
             self.client.get("/api/products/" + product)
 
     @task(3)
