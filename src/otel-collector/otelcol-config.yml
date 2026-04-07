@@ -120,7 +120,6 @@ receivers:
           system.uptime:
             enabled: true
 exporters:
-  debug:
   otlp:
     endpoint: "jaeger:4317"
     tls:
@@ -169,15 +168,15 @@ service:
     traces:
       receivers: [otlp]
       processors: [resourcedetection, memory_limiter, transform]
-      exporters: [otlp, debug, spanmetrics]
+      exporters: [otlp, spanmetrics]
     metrics:
       receivers: [docker_stats, httpcheck/frontend-proxy, hostmetrics, nginx, otlp, postgresql, redis, spanmetrics]
       processors: [resourcedetection, memory_limiter]
-      exporters: [otlphttp/prometheus, debug]
+      exporters: [otlphttp/prometheus]
     logs:
       receivers: [otlp]
       processors: [resourcedetection, memory_limiter]
-      exporters: [opensearch, debug]
+      exporters: [opensearch]
   telemetry:
     metrics:
       readers:
