@@ -116,6 +116,11 @@ processors:
       statements:
       - replace_pattern(name, "\\?.*", "")
       - replace_match(name, "GET /api/products/*", "GET /api/products/{productId}")
+  filter/drop_kafka_producer_snapshots:
+    error_mode: ignore
+    logs:
+      log_record:
+        - 'resource.attributes["service.name"] == "kafka" and IsMatch(body, ".*ProducerStateManager.*Wrote producer snapshot.*with 0 producer ids.*")'
 
 exporters:
   debug: {}
@@ -135,6 +140,7 @@ service:
       processors:
       - memory_limiter
       - resource
+      - filter/drop_kafka_producer_snapshots
       - transform
       - batch
       receivers:
