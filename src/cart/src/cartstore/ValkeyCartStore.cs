@@ -208,11 +208,6 @@ public class ValkeyCartStore : ICartStore
     {
         var stopwatch = Stopwatch.StartNew();
 
-        if (_logger.IsEnabled(LogLevel.Information))
-        {
-            _logger.LogInformation("GetCartAsync called with userId={userId}", userId);
-        }
-
         try
         {
             EnsureRedisConnected();
