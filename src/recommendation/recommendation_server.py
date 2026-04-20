@@ -44,7 +44,8 @@ class RecommendationService(demo_pb2_grpc.RecommendationServiceServicer):
         prod_list = get_product_list(request.product_ids)
         span = trace.get_current_span()
         span.set_attribute("app.products_recommended.count", len(prod_list))
-        logger.info(f"Receive ListRecommendations for product ids:{prod_list}")
+        logger.info(f"Receive ListRecommendations for {len(prod_list)} product ids")
+        logger.debug(f"Receive ListRecommendations for product ids:{prod_list}")
 
         # build and return response
         response = demo_pb2.ListRecommendationsResponse()
@@ -83,8 +84,9 @@ def get_product_list(request_product_ids):
                 logger.info("get_product_list: cache miss")
                 cat_response = product_catalog_stub.GetProduct(demo_pb2.Empty())
                 response_ids = [x.id for x in cat_response.products]
-                cached_ids = cached_ids + response_ids
-                cached_ids = cached_ids + cached_ids[:len(cached_ids) // 4]
+                cached_ids.extend(response_ids)
+                cached_ids.extend(cached_ids[:len(cached_ids) // 4])
+                cached_ids = cached_ids[:max_responses] # Limit the size of cached_ids
                 product_ids = cached_ids
             else:
                 span.set_attribute("app.cache_hit", True)
@@ -93,7 +95,7 @@ def get_product_list(request_product_ids):
         else:
             span.set_attribute("app.recommendation.cache_enabled", False)
             cat_response = product_catalog_stub.ListProducts(demo_pb2.Empty())
-            product_ids = [x.id for x in cat_response.products]
+            product_ids = [x.id for x in cat_response.products][:max_responses] # Limit the size of product_ids
 
         span.set_attribute("app.products.count", len(product_ids))
 
