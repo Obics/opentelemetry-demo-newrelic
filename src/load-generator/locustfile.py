@@ -171,7 +171,6 @@ class WebsiteUser(HttpUser):
     @task(3)
     def view_cart(self):
         with self.tracer.start_as_current_span("user_view_cart", context=Context()):
-            logging.info("User viewing cart")
             self.client.get("/api/cart")
 
     @task(2)
